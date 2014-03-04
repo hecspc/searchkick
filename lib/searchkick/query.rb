@@ -240,6 +240,12 @@ module Searchkick
                 interval: facet_options[:interval] ? facet_options[:interval] : 'day'
               }
             }
+          elsif facet_options[:statistical]
+            payload[:facets][field] = {
+              statistical: {
+                field: facet_options[:statistical]
+              }
+            }
           else
             payload[:facets][field] = {
               terms: {
