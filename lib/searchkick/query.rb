@@ -246,10 +246,11 @@ module Searchkick
                 field: facet_options[:statistical]
               }
             }
+
           else
             payload[:facets][field] = {
               terms: {
-                field: field,
+                field: facet_options[:terms] ? facet_options[:terms] : field,
                 size: facet_options[:limit] ? facet_options[:limit] + 150 : 100000
               }
             }
