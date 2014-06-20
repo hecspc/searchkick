@@ -62,4 +62,19 @@ class TestInheritance < Minitest::Unit::TestCase
     assert_equal ["tiger"], Animal.search("tige", fields: [:name], suggest: true).suggestions.sort
   end
 
+  def test_reindex
+    store_names ["Bear A"], Cat
+    store_names ["Bear B"], Dog
+    Animal.reindex
+    assert_equal 1, Dog.search("bear").size
+  end
+
+  # TODO move somewhere better
+
+  def test_multiple_indices
+    store_names ["Product A"]
+    store_names ["Product B"], Animal
+    assert_search "product", ["Product A", "Product B"], index_name: [Product.searchkick_index.name, Animal.searchkick_index.name], conversions: false
+  end
+
 end

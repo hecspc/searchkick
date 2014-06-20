@@ -38,7 +38,8 @@ module Searchkick
       # pagination
       page = [options[:page].to_i, 1].max
       per_page = (options[:limit] || options[:per_page] || 100000).to_i
-      offset = options[:offset] || (page - 1) * per_page
+      padding = [options[:padding].to_i, 0].max
+      offset = options[:offset] || (page - 1) * per_page + padding
 
       conversions_field = searchkick_options[:conversions]
       personalize_field = searchkick_options[:personalize]
@@ -73,13 +74,13 @@ module Searchkick
         else
           queries = []
           fields.each do |field|
+            shared_options = {
+              fields: [field],
+              query: term,
+              use_dis_max: false,
+              operator: operator
+            }
             if field == "_all" or field.end_with?(".analyzed")
-              shared_options = {
-                fields: [field],
-                query: term,
-                use_dis_max: false,
-                operator: operator
-              }
               shared_options[:cutoff_frequency] = 0.001 unless operator == "and"
               queries.concat [
                 {multi_match: shared_options.merge(boost: 10, analyzer: "searchkick_search")},
@@ -94,13 +95,7 @@ module Searchkick
               end
             else
               analyzer = field.match(/\.word_(start|middle|end)\z/) ? "searchkick_word_search" : "searchkick_autocomplete_search"
-              queries << {
-                multi_match: {
-                  fields: [field],
-                  query: term,
-                  analyzer: analyzer
-                }
-              }
+              queries << {multi_match: shared_options.merge(analyzer: analyzer)}
             end
           end
 
@@ -218,6 +213,7 @@ module Searchkick
         facets.each do |field, facet_options|
           # ask for extra facets due to
           # https://github.com/elasticsearch/elasticsearch/issues/1305
+          size = facet_options[:limit] ? facet_options[:limit] + 150 : 100000
 
           if facet_options[:ranges]
             payload[:facets][field] = {
@@ -247,11 +243,19 @@ module Searchkick
               }
             }
 
+          elsif facet_options[:stats]
+            payload[:facets][field] = {
+              terms_stats: {
+                key_field: field,
+                value_script: "doc.score",
+                size: size
+              }
+            }
           else
             payload[:facets][field] = {
               terms: {
                 field: facet_options[:terms] ? facet_options[:terms] : field,
-                size: facet_options[:limit] ? facet_options[:limit] + 150 : 100000
+                size: size
               }
             }
           end
@@ -261,6 +265,7 @@ module Searchkick
           # offset is not possible
           # http://elasticsearch-users.115913.n3.nabble.com/Is-pagination-possible-in-termsStatsFacet-td3422943.html
 
+          facet_options.deep_merge!(where: options[:where].reject{|k| k == field}) if options[:smart_facets] == true
           facet_filters = where_filters(facet_options[:where])
           if facet_filters.any?
             payload[:facets][field][:facet_filter] = {
@@ -275,8 +280,12 @@ module Searchkick
       # suggestions
       if options[:suggest]
         suggest_fields = (searchkick_options[:suggest] || []).map(&:to_s)
+
         # intersection
-        suggest_fields = suggest_fields & options[:fields].map(&:to_s) if options[:fields]
+        if options[:fields]
+          suggest_fields = suggest_fields & options[:fields].map{|v| (v.is_a?(Hash) ? v.keys.first : v).to_s }
+        end
+
         if suggest_fields.any?
           payload[:suggest] = {text: term}
           suggest_fields.each do |field|
@@ -315,6 +324,7 @@ module Searchkick
       @facet_limits = facet_limits
       @page = page
       @per_page = per_page
+      @padding = padding
       @load = load
     end
 
@@ -345,7 +355,7 @@ module Searchkick
       rescue => e # TODO rescue type
         status_code = e.message[1..3].to_i
         if status_code == 404
-          raise "Index missing - run #{searchkick_klass.name}.reindex"
+          raise MissingIndexError, "Index missing - run #{searchkick_klass.name}.reindex"
         elsif status_code == 500 and (
             e.message.include?("IllegalArgumentException[minimumSimilarity >= 1]") or
             e.message.include?("No query registered for [multi_match]") or
@@ -353,7 +363,13 @@ module Searchkick
             e.message.include?("No query registered for [function_score]]")
           )
 
-          raise "This version of Searchkick requires Elasticsearch 0.90.4 or greater"
+          raise UnsupportedVersionError, "This version of Searchkick requires Elasticsearch 0.90.4 or greater"
+        elsif status_code == 400
+          if e.message.include?("[multi_match] analyzer [searchkick_search] not found")
+            raise InvalidQueryError, "Bad mapping - run #{searchkick_klass.name}.reindex"
+          else
+            raise InvalidQueryError, e.message
+          end
         else
           raise e
         end
@@ -371,6 +387,7 @@ module Searchkick
       opts = {
         page: @page,
         per_page: @per_page,
+        padding: @padding,
         load: @load,
         includes: options[:include] || options[:includes]
       }

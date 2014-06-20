@@ -19,16 +19,24 @@ class TestSql < Minitest::Unit::TestCase
   end
 
   def test_pagination
-    store_names ["Product A", "Product B", "Product C", "Product D", "Product E"]
-    products = Product.search("product", order: {name: :asc}, page: 2, per_page: 2)
-    assert_equal ["Product C", "Product D"], products.map(&:name)
+    store_names ["Product A", "Product B", "Product C", "Product D", "Product E", "Product F"]
+    products = Product.search("product", order: {name: :asc}, page: 2, per_page: 2, padding: 1)
+    assert_equal ["Product D", "Product E"], products.map(&:name)
     assert_equal 2, products.current_page
+    assert_equal 1, products.padding
     assert_equal 2, products.per_page
+    assert_equal 2, products.size
+    assert_equal 2, products.length
     assert_equal 3, products.total_pages
-    assert_equal 5, products.total_count
-    assert_equal 5, products.total_entries
+    assert_equal 6, products.total_count
+    assert_equal 6, products.total_entries
     assert_equal 2, products.limit_value
-    assert_equal 4, products.offset_value
+    assert_equal 3, products.offset_value
+    assert_equal 3, products.offset
+    assert !products.first_page?
+    assert !products.last_page?
+    assert !products.empty?
+    assert products.any?
   end
 
   def test_pagination_nil_page
@@ -36,6 +44,7 @@ class TestSql < Minitest::Unit::TestCase
     products = Product.search("product", order: {name: :asc}, page: nil, per_page: 2)
     assert_equal ["Product A", "Product B"], products.map(&:name)
     assert_equal 1, products.current_page
+    assert products.first_page?
   end
 
   def test_where
@@ -187,6 +196,10 @@ class TestSql < Minitest::Unit::TestCase
       {name: "Product C", color: "red", store_id: 2}
     ]
     assert_order "product", ["Product A", "Product B", "Product C"], order: {color: :asc, store_id: :desc}
+  end
+
+  def test_order_ignore_unmapped
+    assert_order "product", [], order: {not_mapped: {ignore_unmapped: true}}, conversions: false
   end
 
   def test_partial

@@ -1,3 +1,36 @@
+## 0.7.7
+
+- Added support for automatic failover
+- Fixed `operator` option (and default) for partial matches
+
+## 0.7.6
+
+- Added `stats` option to facets
+- Added `padding` option
+
+## 0.7.5
+
+- Do not throw errors when index becomes out of sync with database
+- Added custom exception types
+- Fixed `offset` and `offset_value`
+
+## 0.7.4
+
+- Fixed reindex with inheritance
+
+## 0.7.3
+
+- Fixed multi-index searches
+- Fixed suggestions for partial matches
+- Added `offset` and `length` for improved pagination
+
+## 0.7.2
+
+- Added smart facets
+- Added more fields to `load: false` result
+- Fixed logging for multi-index searches
+- Added `first_page?` and `last_page?` for improved Kaminari support
+
 ## 0.7.1
 
 - Fixed huge issue w/ zero-downtime reindexing on 0.90

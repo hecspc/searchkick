@@ -5,7 +5,7 @@ module Searchkick
 
     attr_reader :klass, :response, :options
 
-    def_delegators :results, :each, :empty?, :size, :slice, :[], :to_ary
+    def_delegators :results, :each, :any?, :empty?, :size, :length, :slice, :[], :to_ary
 
     def initialize(klass, response, options = {})
       @klass = klass
@@ -16,16 +16,32 @@ module Searchkick
     def results
       @results ||= begin
         if options[:load]
-          hit_ids = hits.map{|hit| hit["_id"] }
-          records = klass
-          if options[:includes]
-            records = records.includes(options[:includes])
+          # results can have different types
+          results = {}
+
+          hits.group_by{|hit, i| hit["_type"] }.each do |type, grouped_hits|
+            records = type.camelize.constantize
+            if options[:includes]
+              records = records.includes(options[:includes])
+            end
+            results[type] =
+              if records.respond_to?(:primary_key)
+                records.where(records.primary_key => grouped_hits.map{|hit| hit["_id"] }).to_a
+              else
+                records.queryable.for_ids(grouped_hits.map{|hit| hit["_id"] }).to_a
+              end
           end
-          records = records.find(hit_ids)
-          hit_ids = hit_ids.map(&:to_s)
-          records.sort_by{|r| hit_ids.index(r.id.to_s)  }
+
+          # sort
+          hits.map do |hit|
+            results[hit["_type"]].find{|r| r.id.to_s == hit["_id"].to_s }
+          end.compact
         else
-          hits.map{|hit| Hashie::Mash.new(hit["_source"]) }
+          hits.map do |hit|
+            result = hit.except("_source").merge(hit["_source"])
+            result["id"] ||= result["_id"] # needed for legacy reasons
+            Hashie::Mash.new(result)
+          end
         end
       end
     end
@@ -74,13 +90,19 @@ module Searchkick
     end
     alias_method :limit_value, :per_page
 
+    def padding
+      options[:padding]
+    end
+
     def total_pages
       (total_count / per_page.to_f).ceil
     end
+    alias_method :num_pages, :total_pages
 
     def offset_value
-      current_page * per_page
+      (current_page - 1) * per_page + padding
     end
+    alias_method :offset, :offset_value
 
     def previous_page
       current_page > 1 ? (current_page - 1) : nil
@@ -88,6 +110,14 @@ module Searchkick
 
     def next_page
       current_page < total_pages ? (current_page + 1) : nil
+    end
+
+    def first_page?
+      previous_page.nil?
+    end
+
+    def last_page?
+      next_page.nil?
     end
 
     protected

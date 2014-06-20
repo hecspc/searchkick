@@ -5,18 +5,19 @@ class TestFacets < Minitest::Unit::TestCase
   def setup
     super
     store [
-      {name: "Product Show", store_id: 1, in_stock: true, color: "blue", price: 21},
-      {name: "Product Hide", store_id: 2, in_stock: false, color: "green", price: 25},
-      {name: "Product B", store_id: 2, in_stock: false, color: "red", price: 5}
+      {name: "Product Show", latitude: 37.7833, longitude: 12.4167, store_id: 1, in_stock: true, color: "blue", price: 21},
+      {name: "Product Hide", latitude: 29.4167, longitude: -98.5000, store_id: 2, in_stock: false, color: "green", price: 25},
+      {name: "Product B", latitude: 43.9333, longitude: -122.4667, store_id: 2, in_stock: false, color: "red", price: 5},
+      {name: "Foo", latitude: 43.9333, longitude: 12.4667, store_id: 3, in_stock: false, color: "yellow", price: 15}
     ]
   end
 
   def test_basic
-    assert_equal 2, Product.search("Product", facets: [:store_id]).facets["store_id"]["terms"].size
+    assert_equal ({1 => 1, 2 => 2}), store_facet(facets: [:store_id])
   end
 
   def test_where
-    assert_equal 1, Product.search("Product", facets: {store_id: {where: {in_stock: true}}}).facets["store_id"]["terms"].size
+    assert_equal ({1 => 1}), store_facet(facets: {store_id: {where: {in_stock: true}}})
   end
 
   def test_limit
@@ -37,4 +38,38 @@ class TestFacets < Minitest::Unit::TestCase
     assert_equal 0, facet["ranges"][1]["count"]
     assert_equal 2, facet["ranges"][2]["count"]
   end
+
+  def test_where_no_smart_facets
+    assert_equal ({2 => 2}), store_facet(where: {color: "red"}, facets: {store_id: {where: {in_stock: false}}})
+  end
+
+  def test_smart_facets
+    assert_equal ({1 => 1}), store_facet(where: {in_stock: true}, facets: [:store_id], smart_facets: true)
+  end
+
+  def test_smart_facets_where
+    assert_equal ({2 => 1}), store_facet(where: {color: "red"}, facets: {store_id: {where: {in_stock: false}}}, smart_facets: true)
+  end
+
+  def test_smart_facets_skip_facet
+    assert_equal ({1 => 1, 2 => 2}), store_facet(where: {store_id: 2}, facets: [:store_id], smart_facets: true)
+  end
+
+  def test_smart_facets_skip_facet_complex
+    assert_equal ({1 => 1, 2 => 1}), store_facet(where: {store_id: 2, price: {gt: 5}}, facets: [:store_id], smart_facets: true)
+  end
+
+  def test_stats_facets
+    options = {where: {store_id: 2}, facets: {store_id: {stats: true}}}
+    facets = Product.search("Product", options).facets["store_id"]["terms"]
+    expected_facets_keys = %w[term count total_count min max total mean]
+    assert_equal expected_facets_keys, facets.first.keys
+  end
+
+  protected
+
+  def store_facet(options)
+    Hash[ Product.search("Product", options).facets["store_id"]["terms"].map{|v| [v["term"], v["count"]] } ]
+  end
+
 end

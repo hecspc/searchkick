@@ -21,13 +21,15 @@ Plus:
 - “Did you mean” suggestions
 - works with ActiveRecord and Mongoid
 
+:speech_balloon: Get [handcrafted updates](http://chartkick.us7.list-manage.com/subscribe?u=952c861f99eb43084e0a49f98&id=6ea6541e8e&group[0][4]=true) for new features
+
 :tangerine: Battle-tested at [Instacart](https://www.instacart.com)
 
 [![Build Status](https://travis-ci.org/ankane/searchkick.png?branch=master)](https://travis-ci.org/ankane/searchkick)
 
 We highly recommend tracking queries and conversions
 
-:zap: [Searchjoy](http://ankane.github.io/searchjoy/) makes it easy
+:zap: [Searchjoy](https://github.com/ankane/searchjoy) makes it easy
 
 ## Get Started
 
@@ -42,6 +44,8 @@ Add this line to your application’s Gemfile:
 ```ruby
 gem "searchkick"
 ```
+
+For Elasticsearch 0.90, use version `0.6.3` and [this readme](https://github.com/ankane/searchkick/blob/v0.6.3/README.md).
 
 Add searchkick to models you want to search.
 
@@ -104,6 +108,8 @@ Order
 order: {_score: :desc} # most relevant first - default
 ```
 
+[All of these sort options are supported](http://www.elasticsearch.org/guide/en/elasticsearch/reference/current/search-request-sort.html)
+
 Limit / offset
 
 ```ruby
@@ -158,7 +164,7 @@ class Product < ActiveRecord::Base
 end
 ```
 
-And to search:
+And to search (after you reindex):
 
 ```ruby
 Product.search "back", fields: [{name: :word_start}]
@@ -275,7 +281,7 @@ end
 
 You do **not** need to clean up the search queries.  Searchkick automatically treats `apple` and `APPLES` the same.
 
-Next, add conversions to the index.  You must specify the conversions field as of version `0.2.0`.
+Next, add conversions to the index.
 
 ```ruby
 class Product < ActiveRecord::Base
@@ -329,6 +335,8 @@ Autocomplete predicts what a user will type, making the search experience faster
 
 ![Autocomplete](http://ankane.github.io/searchkick/autocomplete.png)
 
+**Note:** If you only have a few thousand records, don’t use Searchkick for autocomplete. It’s *much* faster to load all records into JavaScript and autocomplete there (eliminates network requests).
+
 First, specify which fields use this feature.  This is necessary since autocomplete can increase the index size significantly, but don’t worry - this gives you blazing faster queries.
 
 ```ruby
@@ -343,11 +351,11 @@ Reindex and search with:
 City.search "san fr", fields: [{name: :text_start}]
 ```
 
-Typically, you want to use a Javascript library like [typeahead.js](http://twitter.github.io/typeahead.js/) or [jQuery UI](http://jqueryui.com/autocomplete/).
+Typically, you want to use a JavaScript library like [typeahead.js](http://twitter.github.io/typeahead.js/) or [jQuery UI](http://jqueryui.com/autocomplete/).
 
 #### Here’s how to make it work with Rails
 
-First, add a controller action.
+First, add a route and controller action.
 
 ```ruby
 # app/controllers/cities_controller.rb
@@ -360,7 +368,7 @@ class CitiesController < ApplicationController
 end
 ```
 
-Then add the search box and Javascript code to a view.
+Then add the search box and JavaScript code to a view.
 
 ```html
 <input type="text" id="query" name="query" />
@@ -403,10 +411,29 @@ products = Product.search "chuck taylor", facets: [:product_type, :gender, :bran
 p products.facets
 ```
 
-Advanced
+By default, `where` conditions are not applied to facets (for backward compatibility).
 
 ```ruby
-Product.search "2% Milk", facets: {store_id: {where: {in_stock: true}, limit: 10}}
+Product.search "wingtips", where: {color: "brandy"}, facets: [:size]
+# facets *not* filtered by color :(
+```
+
+Change this with:
+
+```ruby
+Product.search "wingtips", where: {color: "brandy"}, facets: [:size], smart_facets: true
+```
+
+or set `where` conditions for each facet separately:
+
+```ruby
+Product.search "wingtips", facets: {size: {where: {color: "brandy"}}}
+```
+
+Limit
+
+```ruby
+Product.search "2% Milk", facets: {store_id: {limit: 10}}
 ```
 
 Ranges
@@ -414,6 +441,12 @@ Ranges
 ```ruby
 price_ranges = [{to: 20}, {from: 20, to: 50}, {from: 50}]
 Product.search "*", facets: {price: {ranges: price_ranges}}
+```
+
+Use the `stats` option to get to max, min, mean, and total scores for each facet
+
+```ruby
+Product.search "*", facets: {store_id: {stats: true}}
 ```
 
 ### Highlight
@@ -450,8 +483,6 @@ product.similar(fields: ["name"])
 ```
 
 ### Geospatial Searches
-
-**Note:** Before `0.3.0`, locations were indexed incorrectly. When upgrading, be sure to reindex immediately.
 
 ```ruby
 class City < ActiveRecord::Base
@@ -547,6 +578,16 @@ Then deploy and reindex:
 rake searchkick:reindex CLASS=Product
 ```
 
+### Automatic Failover
+
+Create an initializer `config/initializers/elasticsearch.rb` with multiple hosts:
+
+```ruby
+Searchkick.client = Elasticsearch::Client.new(hosts: ["localhost:9200", "localhost:9201"], retry_on_failure: true)
+```
+
+See [elasticsearch-transport](https://github.com/elasticsearch/elasticsearch-ruby/blob/master/elasticsearch-transport) for a complete list of options.
+
 ## Advanced
 
 Prefer to use the [Elasticsearch DSL](http://www.elasticsearch.org/guide/en/elasticsearch/reference/current/query-dsl-queries.html) but still want awesome features like zero-downtime reindexing?
@@ -594,8 +635,6 @@ products = query.execute
 ```
 
 ## Reference
-
-Searchkick requires Elasticsearch `0.90.4` or higher.
 
 Reindex one record
 
@@ -744,9 +783,19 @@ rake searchkick:reindex:all
 
 4. Once it finishes, replace search calls w/ searchkick calls
 
-## Note about 0.6.0 and 0.7.0
+## Upgrading
+
+View the [changelog](https://github.com/ankane/searchkick/blob/master/CHANGELOG.md).
+
+Important notes are listed below.
+
+### 0.6.0 and 0.7.0
 
 If running Searchkick `0.6.0` or `0.7.0` and Elasticsearch `0.90`, we recommend upgrading to Searchkick `0.6.1` or `0.7.1` to fix an issue that causes downtime when reindexing.
+
+### 0.3.0
+
+Before `0.3.0`, locations were indexed incorrectly. When upgrading, be sure to reindex immediately.
 
 ## Elasticsearch Gotchas
 
@@ -774,10 +823,6 @@ Thanks to Karel Minarik for [Elasticsearch Ruby](https://github.com/elasticsearc
 - Add section on testing
 - Much finer customization
 - More transparency into generated queries (for advanced use)
-
-## History
-
-View the [changelog](https://github.com/ankane/searchkick/blob/master/CHANGELOG.md)
 
 ## Contributing
 
