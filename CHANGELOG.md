@@ -1,3 +1,25 @@
+## 0.8.1 [unreleased]
+
+- Added `search_method_name` option
+
+## 0.8.0
+
+- Added support for Elasticsearch 1.2
+
+## 0.7.9
+
+- Added `tokens` method
+- Added `json` option
+- Added exact matches
+- Added `prev_page` for Kaminari pagination
+- Added `import` option to reindex
+
+## 0.7.8
+
+- Added `boost_by` and `boost_where` options
+- Added ability to boost fields - `name^10`
+- Added `select` option for `load: false`
+
 ## 0.7.7
 
 - Added support for automatic failover

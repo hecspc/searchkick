@@ -33,6 +33,9 @@ class TestSql < Minitest::Unit::TestCase
     assert_equal 2, products.limit_value
     assert_equal 3, products.offset_value
     assert_equal 3, products.offset
+    assert_equal 3, products.next_page
+    assert_equal 1, products.previous_page
+    assert_equal 1, products.prev_page
     assert !products.first_page?
     assert !products.last_page?
     assert !products.empty?
@@ -272,6 +275,21 @@ class TestSql < Minitest::Unit::TestCase
   def test_load_false_with_include
     store_names ["Product A"]
     assert_kind_of Hash, Product.search("product", load: false, include: [:store]).first
+  end
+
+  # select
+
+  def test_select
+    store [{name: "Product A", store_id: 1}]
+    result = Product.search("product", load: false, select: [:name, :store_id]).first
+    assert_equal %w[id name store_id], result.keys.reject{|k| k.start_with?("_") }.sort
+    assert_equal ["Product A"], result.name # this is not great
+  end
+
+  def test_select_array
+    store [{name: "Product A", user_ids: [1, 2]}]
+    result = Product.search("product", load: false, select: [:user_ids]).first
+    assert_equal [1, 2], result.user_ids
   end
 
   # TODO see if Mongoid is loaded

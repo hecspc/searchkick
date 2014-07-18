@@ -6,7 +6,6 @@ require "searchkick/index"
 require "searchkick/reindex"
 require "searchkick/results"
 require "searchkick/query"
-require "searchkick/search"
 require "searchkick/similar"
 require "searchkick/model"
 require "searchkick/tasks"
@@ -17,12 +16,21 @@ module Searchkick
   class UnsupportedVersionError < StandardError; end
   class InvalidQueryError < Elasticsearch::Transport::Transport::Errors::BadRequest; end
 
+  class << self
+    attr_accessor :search_method_name
+  end
+  self.search_method_name = :search
+
   def self.client
     @client ||= Elasticsearch::Client.new(url: ENV["ELASTICSEARCH_URL"])
   end
 
   def self.client=(client)
     @client = client
+  end
+
+  def self.server_version
+    @server_version ||= client.info["version"]["number"]
   end
 
   @callbacks = true
