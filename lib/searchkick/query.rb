@@ -266,12 +266,27 @@ module Searchkick
                   size: size
                 }
               }
-            }
-          else
-            payload[:facets][field] = {
-              terms: {
-                field: facet_options[:terms] ? facet_options[:terms] : field,
-                size: size
+            elsif facet_options[:histogram]
+              payload[:facets][field] = {
+                histogram: {
+                  field: facet_options[:histogram],
+                  min_count: 0,
+                  interval: facet_options[:interval] ? facet_options[:interval] : '100'
+                }
+              }
+            elsif facet_options[:date_histogram]
+              payload[:facets][field] = {
+                date_histogram: {
+                  field: facet_options[:date_histogram],
+                  interval: facet_options[:interval] ? facet_options[:interval] : 'day'
+                }
+              }
+            else
+              payload[:facets][field] = {
+                terms: {
+                  field: facet_options[:terms] ? facet_options[:terms] : field,
+                  size: size
+                }
               }
             end
 
