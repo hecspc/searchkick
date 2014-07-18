@@ -266,12 +266,12 @@ module Searchkick
                   size: size
                 }
               }
-            }
-          else
-            payload[:facets][field] = {
-              terms: {
-                field: facet_options[:terms] ? facet_options[:terms] : field,
-                size: size
+            else
+              payload[:facets][field] = {
+                terms: {
+                  field: facet_options[:terms] ? facet_options[:terms] : field,
+                  size: size
+                }
               }
             end
 
